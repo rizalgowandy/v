@@ -19,13 +19,26 @@ mut:
 	tmp        []u8
 }
 
+// free the resources taken by the Cbc `x`
+@[unsafe]
+pub fn (mut x Cbc) free() {
+	$if prealloc {
+		return
+	}
+	unsafe {
+		// x.b.free() TODO add?
+		x.iv.free()
+		x.tmp.free()
+	}
+}
+
 // internal
 fn new_des_cbc(b Block, iv []u8) Cbc {
 	return Cbc{
-		b: b
+		b:          b
 		block_size: b.block_size
-		iv: iv.clone()
-		tmp: []u8{len: b.block_size}
+		iv:         iv.clone()
+		tmp:        []u8{len: b.block_size}
 	}
 }
 

@@ -12,32 +12,32 @@ mut:
 fn main() {
 	if os.args.len < 2 {
 		eprintln('Usage: play_wav file1.wav file2.wav ...')
-		play_sounds([os.resource_abs_path('uhoh.wav')]) ?
+		play_sounds([os.resource_abs_path('uhoh.wav')])!
 		exit(1)
 	}
-	play_sounds(os.args[1..]) ?
+	play_sounds(os.args[1..])!
 }
 
-fn play_sounds(files []string) ? {
+fn play_sounds(files []string) ! {
 	mut player := Player{}
 	player.init()
 	for f in files {
 		if !os.exists(f) || os.is_dir(f) {
-			eprintln('skipping "$f" (does not exist)')
+			eprintln('skipping "${f}" (does not exist)')
 			continue
 		}
 		fext := os.file_ext(f).to_lower()
 		if fext != '.wav' {
-			eprintln('skipping "$f" (not a .wav file)')
+			eprintln('skipping "${f}" (not a .wav file)')
 			continue
 		}
-		player.play_wav_file(f) ?
+		player.play_wav_file(f)!
 	}
 	player.stop()
 }
 
 //
-fn audio_player_callback(buffer &f32, num_frames int, num_channels int, mut p Player) {
+fn audio_player_callback(mut buffer &f32, num_frames int, num_channels int, mut p Player) {
 	if p.finished {
 		return
 	}
@@ -54,9 +54,9 @@ fn audio_player_callback(buffer &f32, num_frames int, num_channels int, mut p Pl
 
 fn (mut p Player) init() {
 	audio.setup(
-		num_channels: 2
+		num_channels:       2
 		stream_userdata_cb: audio_player_callback
-		user_data: p
+		user_data:          p
 	)
 }
 
@@ -65,9 +65,9 @@ fn (mut p Player) stop() {
 	p.free()
 }
 
-fn (mut p Player) play_wav_file(fpath string) ? {
-	println('> play_wav_file: $fpath')
-	samples := read_wav_file_samples(fpath) ?
+fn (mut p Player) play_wav_file(fpath string) ! {
+	println('> play_wav_file: ${fpath}')
+	samples := read_wav_file_samples(fpath)!
 	p.finished = true
 	p.samples << samples
 	p.finished = false
@@ -116,10 +116,10 @@ struct RIFFFormat {
 	sub_format            [16]u8 // GUID
 }
 
-fn read_wav_file_samples(fpath string) ?[]f32 {
+fn read_wav_file_samples(fpath string) ![]f32 {
 	mut res := []f32{}
 	// eprintln('> read_wav_file_samples: $fpath -------------------------------------------------')
-	mut bytes := os.read_bytes(fpath) ?
+	mut bytes := os.read_bytes(fpath)!
 	mut pbytes := &u8(bytes.data)
 	mut offset := u32(0)
 	rh := unsafe { &RIFFHeader(pbytes) }
@@ -131,10 +131,10 @@ fn read_wav_file_samples(fpath string) ?[]f32 {
 		return error('WAV should have `WAVE` form type')
 	}
 	if rh.file_size + 8 != bytes.len {
-		return error('WAV should have valid lenght')
+		return error('WAV should have valid length')
 	}
 	offset += sizeof(RIFFHeader)
-	mut rf := &RIFFFormat(0)
+	mut rf := &RIFFFormat(unsafe { nil })
 	for {
 		if offset >= bytes.len {
 			break
@@ -170,7 +170,7 @@ fn read_wav_file_samples(fpath string) ?[]f32 {
 		}
 		//
 		if ch.chunk_type == [u8(`d`), `a`, `t`, `a`]! {
-			if rf == 0 {
+			if unsafe { rf == 0 } {
 				return error('`data` chunk should be after `fmt ` chunk')
 			}
 			// eprintln('`fmt ` chunk: $rf\n`data` chunk: $ch')

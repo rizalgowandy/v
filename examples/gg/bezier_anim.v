@@ -7,8 +7,8 @@ const rate = f32(1) / 60 * 10
 
 struct App {
 mut:
-	gg   &gg.Context
-	anim &Anim
+	gg   &gg.Context = unsafe { nil }
+	anim &Anim       = unsafe { nil }
 }
 
 struct Anim {
@@ -31,16 +31,15 @@ fn (mut anim Anim) advance() {
 
 fn main() {
 	mut app := &App{
-		gg: 0
 		anim: &Anim{}
 	}
 	app.gg = gg.new_context(
-		bg_color: gx.rgb(174, 198, 255)
-		width: 600
-		height: 400
+		bg_color:     gx.rgb(174, 198, 255)
+		width:        600
+		height:       400
 		window_title: 'Animated cubic Bézier curve'
-		frame_fn: frame
-		user_data: app
+		frame_fn:     frame
+		user_data:    app
 	)
 	app.gg.run()
 }

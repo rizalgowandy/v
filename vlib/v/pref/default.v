@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2022 Alexander Medvednikov. All rights reserved.
+// Copyright (c) 2019-2024 Alexander Medvednikov. All rights reserved.
 // Use of this source code is governed by an MIT license
 // that can be found in the LICENSE file.
 module pref
@@ -6,9 +6,7 @@ module pref
 import os
 import v.vcache
 
-pub const (
-	default_module_path = os.vmodules_dir()
-)
+pub const default_module_path = os.vmodules_dir()
 
 pub fn new_preferences() &Preferences {
 	mut p := &Preferences{}
@@ -21,36 +19,91 @@ fn (mut p Preferences) expand_lookup_paths() {
 		// Location of all vlib files
 		p.vroot = os.dir(vexe_path())
 	}
-	vlib_path := os.join_path(p.vroot, 'vlib')
+	p.vlib = os.join_path(p.vroot, 'vlib')
+	p.vmodules_paths = os.vmodules_paths()
+
 	if p.lookup_path.len == 0 {
 		p.lookup_path = ['@vlib', '@vmodules']
 	}
 	mut expanded_paths := []string{}
 	for path in p.lookup_path {
 		match path {
-			'@vlib' { expanded_paths << vlib_path }
-			'@vmodules' { expanded_paths << os.vmodules_paths() }
+			'@vlib' { expanded_paths << p.vlib }
+			'@vmodules' { expanded_paths << p.vmodules_paths }
 			else { expanded_paths << path }
 		}
 	}
 	p.lookup_path = expanded_paths
 }
 
-pub fn (mut p Preferences) fill_with_defaults() {
+fn (mut p Preferences) expand_exclude_paths() {
+	mut res := []string{}
+	static_replacement_list := ['@vroot', p.vroot, '@vlib', p.vlib]
+	for x in p.exclude {
+		y := x.replace_each(static_replacement_list)
+		if y.contains('@vmodules') {
+			// @vmodules is a list of paths, each of which should be expanded in the complete exclusion list:
+			for vmp in p.vmodules_paths {
+				res << y.replace('@vmodules', vmp)
+			}
+			continue
+		}
+		res << y
+	}
+	p.exclude = res
+}
+
+fn (mut p Preferences) setup_os_and_arch_when_not_explicitly_set() {
+	if p.os == .wasm32_emscripten {
+		// TODO: remove after `$if wasm32_emscripten {` works
+		p.parse_define('emscripten')
+	}
+	host_os := if p.backend == .wasm { OS.wasi } else { get_host_os() }
+	if p.os == ._auto {
+		p.os = host_os
+		p.build_options << '-os ${host_os}'
+	}
+
+	if !p.output_cross_c {
+		if p.os != host_os {
+			// TODO: generalise this not only for macos->linux, after considering the consequences for vab/Android:
+			if host_os == .macos && p.os == .linux {
+				// Cross compilation from macos -> linux; assume AMD64 as the target architecture for now
+				if p.arch == ._auto {
+					p.arch = .amd64
+					p.build_options << '-arch amd64'
+				}
+				p.parse_define('use_bundled_libgc')
+			}
+		}
+	}
 	if p.arch == ._auto {
 		p.arch = get_host_arch()
+		p.build_options << '-arch ${p.arch}'
 	}
+}
+
+pub fn (mut p Preferences) fill_with_defaults() {
+	p.setup_os_and_arch_when_not_explicitly_set()
 	p.expand_lookup_paths()
+	p.expand_exclude_paths()
 	rpath := os.real_path(p.path)
 	if p.out_name == '' {
 		filename := os.file_name(rpath).trim_space()
 		mut base := filename.all_before_last('.')
+		if os.file_ext(base) in ['.c', '.js', '.wasm'] {
+			base = base.all_before_last('.')
+		}
 		if base == '' {
 			// The file name is just `.v` or `.vsh` or `.*`
 			base = filename
 		}
 		target_dir := if os.is_dir(rpath) { rpath } else { os.dir(rpath) }
-		p.out_name = os.join_path(target_dir, base)
+		if p.raw_vsh_tmp_prefix != '' {
+			p.out_name = os.join_path(target_dir, p.raw_vsh_tmp_prefix + '.' + base)
+		} else {
+			p.out_name = os.join_path(target_dir, base)
+		}
 		// Do *NOT* be tempted to generate binaries in the current work folder,
 		// when -o is not given by default, like Go, Clang, GCC etc do.
 		//
@@ -72,9 +125,9 @@ pub fn (mut p Preferences) fill_with_defaults() {
 		// compilers.
 		//
 		// If you do decide to break it, please *at the very least*, test it
-		// extensively, and make a PR about it, instead of commiting directly
+		// extensively, and make a PR about it, instead of committing directly
 		// and breaking the CI, VC, and users doing `v up`.
-		if rpath == '$p.vroot/cmd/v' && os.is_dir('vlib/compiler') {
+		if rpath == '${p.vroot}/cmd/v' && os.is_dir('vlib/compiler') {
 			// Building V? Use v2, since we can't overwrite a running
 			// executable on Windows + the precompiled V is more
 			// optimized.
@@ -85,20 +138,48 @@ pub fn (mut p Preferences) fill_with_defaults() {
 	}
 	rpath_name := os.file_name(rpath)
 	p.building_v = !p.is_repl && (rpath_name == 'v' || rpath_name == 'vfmt.v')
-	if p.os == ._auto {
-		// No OS specifed? Use current system
-		p.os = get_host_os()
+	if p.os == .linux {
+		$if !linux {
+			p.parse_define('cross_compile')
+		}
 	}
-	//
+	if p.output_cross_c {
+		// avoid linking any GC related code, since the target may not have an usable GC system
+		p.gc_mode = .no_gc
+		p.use_cache = false
+		p.skip_unused = false
+		p.parse_define('no_backtrace') // the target may not have usable backtrace() and backtrace_symbols()
+		p.parse_define('cross') // TODO: remove when `$if cross {` works
+	}
+	if p.gc_mode == .unknown {
+		if p.backend != .c || p.building_v || p.is_bare || p.ccompiler == 'msvc' {
+			p.gc_mode = .no_gc
+			p.build_options << ['-gc', 'none']
+		} else {
+			// enable the GC by default
+			p.gc_mode = .boehm_full_opt
+			// NOTE: these are added to p.compile_defines[_all]
+			// more than once when building modules for usecache
+			p.parse_define('gcboehm')
+			p.parse_define('gcboehm_full')
+			p.parse_define('gcboehm_opt')
+		}
+	}
+	if p.is_debug {
+		p.parse_define('debug')
+	}
 	p.try_to_use_tcc_by_default()
 	if p.ccompiler == '' {
 		p.default_c_compiler()
+	}
+	if p.cppcompiler == '' {
+		p.default_cpp_compiler()
 	}
 	p.find_cc_if_cross_compiling()
 	p.ccompiler_type = cc_from_string(p.ccompiler)
 	p.is_test = p.path.ends_with('_test.v') || p.path.ends_with('_test.vv')
 		|| p.path.all_before_last('.v').all_before_last('.').ends_with('_test')
-	p.is_vsh = p.path.ends_with('.vsh')
+	p.is_vsh = p.path.ends_with('.vsh') || p.raw_vsh_tmp_prefix != ''
 	p.is_script = p.is_vsh || p.path.ends_with('.v') || p.path.ends_with('.vv')
 	if p.third_party_option == '' {
 		p.third_party_option = p.cflags
@@ -114,7 +195,7 @@ pub fn (mut p Preferences) fill_with_defaults() {
 	p.cache_manager = vcache.new_cache_manager([
 		vhash,
 		// ensure that different v versions use separate build artefacts
-		'$p.backend | $p.os | $p.ccompiler | $p.is_prod | $p.sanitize',
+		'${p.backend} | ${p.os} | ${p.ccompiler} | ${p.is_prod} | ${p.sanitize}',
 		p.cflags.trim_space(),
 		p.third_party_option.trim_space(),
 		p.compile_defines_all.str(),
@@ -141,7 +222,7 @@ pub fn (mut p Preferences) fill_with_defaults() {
 	}
 
 	$if prealloc {
-		if !p.no_parallel {
+		if !p.no_parallel && p.is_verbose {
 			eprintln('disabling parallel cgen, since V was built with -prealloc')
 		}
 		p.no_parallel = true
@@ -193,11 +274,7 @@ pub fn default_tcc_compiler() string {
 }
 
 pub fn (mut p Preferences) default_c_compiler() {
-	// fast_clang := '/usr/local/Cellar/llvm/8.0.0/bin/clang'
-	// if os.exists(fast_clang) {
-	// return fast_clang
-	// }
-	// TODO fix $if after 'string'
+	// TODO: fix $if after 'string'
 	$if windows {
 		p.ccompiler = 'gcc'
 		return
@@ -205,7 +282,7 @@ pub fn (mut p Preferences) default_c_compiler() {
 	if p.os == .ios {
 		$if !ios {
 			ios_sdk := if p.is_ios_simulator { 'iphonesimulator' } else { 'iphoneos' }
-			ios_sdk_path_res := os.execute_or_exit('xcrun --sdk $ios_sdk --show-sdk-path')
+			ios_sdk_path_res := os.execute_or_exit('xcrun --sdk ${ios_sdk} --show-sdk-path')
 			mut isysroot := ios_sdk_path_res.output.replace('\n', '')
 			arch := if p.is_ios_simulator {
 				'-arch x86_64 -arch arm64'
@@ -215,12 +292,20 @@ pub fn (mut p Preferences) default_c_compiler() {
 			// On macOS, /usr/bin/cc is a hardlink/wrapper for xcrun. clang on darwin hosts
 			// will automatically change the build target based off of the selected sdk, making xcrun -sdk iphoneos pointless
 			p.ccompiler = '/usr/bin/cc'
-			p.cflags = '-isysroot $isysroot $arch' + p.cflags
+			p.cflags = '-isysroot ${isysroot} ${arch}' + p.cflags
 			return
 		}
 	}
 	p.ccompiler = 'cc'
 	return
+}
+
+pub fn (mut p Preferences) default_cpp_compiler() {
+	if p.ccompiler.contains('clang') {
+		p.cppcompiler = 'clang++'
+		return
+	}
+	p.cppcompiler = 'c++'
 }
 
 pub fn vexe_path() string {
@@ -245,12 +330,29 @@ pub fn vexe_path() string {
 	return real_vexe_path
 }
 
+pub fn (p &Preferences) vcross_linker_name() string {
+	vlname := os.getenv('VCROSS_LINKER_NAME')
+	if vlname != '' {
+		return vlname
+	}
+	$if macos {
+		return '/opt/homebrew/opt/llvm/bin/ld.lld'
+	}
+	$if windows {
+		return 'ld.lld.exe'
+	}
+	return 'ld.lld'
+}
+
 pub fn (p &Preferences) vcross_compiler_name() string {
 	vccname := os.getenv('VCROSS_COMPILER_NAME')
 	if vccname != '' {
 		return vccname
 	}
 	if p.os == .windows {
+		if p.os == .freebsd {
+			return 'clang'
+		}
 		if p.m64 {
 			return 'x86_64-w64-mingw32-gcc'
 		}
@@ -259,10 +361,19 @@ pub fn (p &Preferences) vcross_compiler_name() string {
 	if p.os == .linux {
 		return 'clang'
 	}
+	if p.os == .freebsd {
+		return 'clang'
+	}
+	if p.os == .wasm32_emscripten {
+		if os.user_os() == 'windows' {
+			return 'emcc.bat'
+		}
+		return 'emcc'
+	}
 	if p.backend == .c && !p.out_name.ends_with('.c') {
-		eprintln('Note: V can only cross compile to windows and linux for now by default.')
+		eprintln('Note: V can only cross compile to Windows and Linux for now by default.')
 		eprintln('It will use `cc` as a cross compiler for now, although that will probably fail.')
-		eprintln('Set `VCROSS_COMPILER_NAME` to the name of your cross compiler, for your target OS: $p.os .')
+		eprintln('Set `VCROSS_COMPILER_NAME` to the name of your cross compiler, for your target OS: ${p.os} .')
 	}
 	return 'cc'
 }

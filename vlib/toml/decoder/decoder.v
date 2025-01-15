@@ -9,34 +9,33 @@ import toml.token
 import toml.scanner
 import strconv
 
-const (
-	// utf8_max is the largest inclusive value of the Unicodes scalar value ranges.
-	utf8_max = 0x10FFFF
-)
+// utf8_max is the largest inclusive value of the Unicodes scalar value ranges.
+const utf8_max = 0x10FFFF
 
 // Decoder decode special sequences in a tree of TOML `ast.Value`'s.
 pub struct Decoder {
-	scanner &scanner.Scanner
+pub:
+	scanner &scanner.Scanner = unsafe { nil }
 }
 
 // decode decodes certain `ast.Value`'s and all it's children.
-pub fn (d Decoder) decode(mut n ast.Value) ? {
-	walker.walk_and_modify(d, mut n) ?
+pub fn (d Decoder) decode(mut n ast.Value) ! {
+	walker.walk_and_modify(d, mut n)!
 }
 
-fn (d Decoder) modify(mut value ast.Value) ? {
+fn (d Decoder) modify(mut value ast.Value) ! {
 	match value {
 		ast.Quoted {
 			mut v := &(value as ast.Quoted)
-			d.decode_quoted(mut v) ?
+			d.decode_quoted(mut v)!
 		}
 		ast.Number {
 			mut v := &(value as ast.Number)
-			d.decode_number(mut v) ?
+			d.decode_number(mut v)!
 		}
 		ast.DateTime {
 			mut v := &(value as ast.DateTime)
-			d.decode_date_time(mut v) ?
+			d.decode_date_time(mut v)!
 		}
 		else {}
 	}
@@ -48,12 +47,12 @@ fn (d Decoder) excerpt(tp token.Pos) string {
 }
 
 // decode_quoted returns an error if `q` is not a valid quoted TOML string.
-fn (d Decoder) decode_quoted(mut q ast.Quoted) ? {
-	decode_quoted_escapes(mut q) ?
+fn (d Decoder) decode_quoted(mut q ast.Quoted) ! {
+	decode_quoted_escapes(mut q)!
 }
 
 // decode_number decodes the `n ast.Number` into valid TOML.
-fn (d Decoder) decode_number(mut n ast.Number) ? {
+fn (d Decoder) decode_number(mut n ast.Number) ! {
 	if n.text == '-nan' || n.text == '+nan' {
 		n.text = 'nan'
 	}
@@ -73,10 +72,10 @@ fn (d Decoder) decode_number(mut n ast.Number) ? {
 // \\         - backslash       (U+005C)
 // \uXXXX     - Unicode         (U+XXXX)
 // \UXXXXXXXX - Unicode         (U+XXXXXXXX)
-pub fn decode_quoted_escapes(mut q ast.Quoted) ? {
+pub fn decode_quoted_escapes(mut q ast.Quoted) ! {
 	// Setup a scanner in stack memory for easier navigation.
 	mut eat_whitespace := false
-	// TODO use string builder
+	// TODO: use string builder
 	mut decoded_s := ''
 	// See https://toml.io/en/v1.0.0#string for more info on string types.
 	is_basic := q.quote == `\"`
@@ -84,16 +83,11 @@ pub fn decode_quoted_escapes(mut q ast.Quoted) ? {
 		return
 	}
 
-	mut s := scanner.new_simple_text(q.text) ?
+	mut s := scanner.new_simple_text(q.text)!
 	q.text = q.text.replace('\\"', '"')
 
-	for {
-		ch := s.next()
-		if ch == scanner.end_of_text {
-			break
-		}
+	for ch := s.next(); ch != scanner.end_of_text; ch = s.next() {
 		ch_byte := u8(ch)
-
 		if eat_whitespace && ch_byte.is_space() {
 			continue
 		}
@@ -103,53 +97,44 @@ pub fn decode_quoted_escapes(mut q ast.Quoted) ? {
 			ch_next := s.at()
 			ch_next_byte := u8(ch_next)
 
-			if ch_next == `\\` {
-				decoded_s += ch_next_byte.ascii_str()
-				s.next()
-				continue
-			}
-
 			if q.is_multiline {
 				if ch_next_byte.is_space() {
 					eat_whitespace = true
 					continue
 				}
 			}
-
-			if ch_next == `"` {
-				decoded_s += '"'
-				s.next()
-				continue
-			}
-
-			if ch_next == `n` {
-				decoded_s += '\n'
-				s.next()
-				continue
-			}
-
-			if ch_next == `t` {
-				decoded_s += '\t'
-				s.next()
-				continue
-			}
-
-			if ch_next == `b` {
-				decoded_s += '\b'
-				s.next()
-				continue
-			}
-
-			if ch_next == `r` {
-				decoded_s += '\r'
-				s.next()
-				continue
-			}
-
-			if ch_next == `f` {
-				decoded_s += '\f'
-				s.next()
-				continue
+			match rune(ch_next) {
+				`\\`, `"` {
+					decoded_s += ch_next_byte.ascii_str()
+					s.next()
+					continue
+				}
+				`n` {
+					decoded_s += '\n'
+					s.next()
+					continue
+				}
+				`t` {
+					decoded_s += '\t'
+					s.next()
+					continue
+				}
+				`b` {
+					decoded_s += '\b'
+					s.next()
+					continue
+				}
+				`r` {
+					decoded_s += '\r'
+					s.next()
+					continue
+				}
+				`f` {
+					decoded_s += '\f'
+					s.next()
+					continue
+				}
+				else {}
 			}
 
 			escape := ch_byte.ascii_str() + ch_next_byte.ascii_str()
@@ -172,18 +157,17 @@ pub fn decode_quoted_escapes(mut q ast.Quoted) ? {
 					if slen <= s.remaining() {
 						pos := s.state().pos
 						sequence := s.text[pos..pos + slen + 1]
-
 						decoded, unicode_val, sequence_length = decode_unicode_escape(sequence) or {
 							decoded_s += escape
 							continue
 						}
-						if unicode_val > decoder.utf8_max || unicode_val < 0 {
+						if unicode_val > utf8_max || unicode_val < 0 {
 							decoded_s += escape
 							continue
 						}
 						// Check if the Unicode value is actually in the valid Unicode scalar value ranges.
 						if !((unicode_val >= 0x0000 && unicode_val <= 0xD7FF)
-							|| (unicode_val >= 0xE000 && unicode_val <= decoder.utf8_max)) {
+							|| (unicode_val >= 0xE000 && unicode_val <= utf8_max)) {
 							decoded_s += escape
 							continue
 						}
@@ -214,7 +198,7 @@ pub fn decode_quoted_escapes(mut q ast.Quoted) ? {
 // The sequence is expected to be prefixed with either `u` or `U`.
 // decode_unicode_escape returns the decoded rune as
 // a string, it's integer value and it's length.
-fn decode_unicode_escape(esc_unicode string) ?(string, int, int) {
+fn decode_unicode_escape(esc_unicode string) !(string, int, int) {
 	is_long_esc_type := esc_unicode.starts_with('U')
 	mut sequence := esc_unicode[1..]
 	hex_digits_len := if is_long_esc_type { 8 } else { 4 }
@@ -226,13 +210,13 @@ fn decode_unicode_escape(esc_unicode string) ?(string, int, int) {
 	if unicode_point.len < 8 {
 		unicode_point = '0'.repeat(8 - unicode_point.len) + unicode_point
 	}
-	i64_val := strconv.parse_int(unicode_point, 16, 0) ?
+	i64_val := strconv.parse_int(unicode_point, 16, 0)!
 	rn := rune(i64_val)
-	return '$rn', int(i64_val), sequence_len
+	return '${rn}', int(i64_val), sequence_len
 }
 
 // decode_date_time decodes the `dt ast.DateTime`.
-fn (d Decoder) decode_date_time(mut dt ast.DateTime) ? {
+fn (d Decoder) decode_date_time(mut dt ast.DateTime) ! {
 	// Expand milliseconds that are only 1 char
 	if dt.text.contains('.') {
 		yymmddhhmmss := dt.text.all_before('.')

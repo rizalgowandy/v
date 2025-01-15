@@ -1,48 +1,53 @@
 module doc
 
-pub fn (nodes []DocNode) find(symname string) ?DocNode {
+import os
+
+pub const should_sort = os.getenv_opt('VDOC_SORT') or { 'true' }.bool()
+
+pub fn (nodes []DocNode) find(symname string) !DocNode {
 	for node in nodes {
-		if node.name != symname {
-			continue
+		if node.name == symname {
+			return node
 		}
-		return node
 	}
 	return error('symbol not found')
 }
 
-// sort_by_name sorts the array based on the symbol names.
-pub fn (mut nodes []DocNode) sort_by_name() {
-	nodes.sort_with_compare(compare_nodes_by_name)
-}
-
-// sort_by_kind sorts the array based on the symbol kind.
-pub fn (mut nodes []DocNode) sort_by_kind() {
-	nodes.sort_with_compare(compare_nodes_by_kind)
-}
-
-fn compare_nodes_by_kind(a &DocNode, b &DocNode) int {
-	ak := int((*a).kind)
-	bk := int((*b).kind)
-	if ak < bk {
-		return -1
+// arrange sorts the DocNodes based on their symbols and names.
+pub fn (mut nodes []DocNode) arrange() {
+	if !should_sort {
+		return
 	}
-	if ak > bk {
-		return 1
+	mut kinds := []SymbolKind{}
+	for v in nodes {
+		if v.kind !in kinds {
+			kinds << v.kind
+		}
 	}
-	return 0
+	kinds.sort_with_compare(compare_sym_kinds)
+	mut res := []DocNode{}
+	for k in kinds {
+		mut kind_nodes := nodes.filter(it.kind == k)
+		kind_nodes.sort(a.name < b.name)
+		res << kind_nodes
+	}
+	nodes = res.clone()
 }
 
-fn compare_nodes_by_name(a &DocNode, b &DocNode) int {
-	al := a.name.to_lower()
-	bl := b.name.to_lower()
-	return compare_strings(al, bl)
+fn compare_sym_kinds(a &SymbolKind, b &SymbolKind) int {
+	ak := int(*a)
+	bk := int(*b)
+	return match true {
+		ak < bk { -1 }
+		ak > bk { 1 }
+		else { 0 }
+	}
 }
 
 // arr() converts the map into an array of `DocNode`.
 pub fn (cnts map[string]DocNode) arr() []DocNode {
-	mut contents := cnts.keys().map(cnts[it])
-	contents.sort_by_name()
-	contents.sort_by_kind()
+	mut contents := cnts.values()
+	contents.arrange()
 	return contents
 }
 
@@ -62,13 +67,12 @@ pub fn (dc DocNode) merge_comments_without_examples() string {
 		if dc.comments[i].is_multi_line_example() {
 			i++
 			if i == dc.comments.len || !dc.comments[i].has_triple_backtick() {
-				eprintln('$dc.file_path:$dc.pos.line_nr: Expected code block after empty example line:')
+				eprintln('${dc.file_path}:${dc.pos.line_nr}: warning: expected code block after empty example line:')
 				eprintln('// ```')
 				if i < dc.comments.len {
 					eprintln('Found:')
 					eprintln('//' + dc.comments[i].text[1..])
 				}
-				exit(1)
 			}
 			i++
 			for i < dc.comments.len && !dc.comments[i].has_triple_backtick() {

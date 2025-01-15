@@ -1,7 +1,7 @@
-import sqlite
+import db.sqlite
 
 struct Movie {
-	id   int    [primary]
+	id   int @[primary]
 	name string
 }
 
@@ -10,15 +10,16 @@ fn x(m Movie) int {
 }
 
 fn test_sql_statement_inside_fn_call() {
-	db := sqlite.connect(':memory:') or { panic('failed') }
+	mut db := sqlite.connect(':memory:') or { panic('failed') }
 	sql db {
 		create table Movie
-	}
+	}!
 	m := Movie{1, 'Maria'}
 	sql db {
 		insert m into Movie
-	}
+	}!
 	dump(x(sql db {
 		select from Movie where id == 1
-	}))
+	}!.first()))
+	db.close()!
 }

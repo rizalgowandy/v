@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2022 Alexander Medvednikov. All rights reserved.
+// Copyright (c) 2019-2024 Alexander Medvednikov. All rights reserved.
 // Use of this source code is governed by an MIT license that can be found in the LICENSE file.
 
 module font
@@ -13,7 +13,7 @@ pub enum Variant {
 	italic
 }
 
-[if debug_font ?]
+@[if debug_font ?]
 fn debug_font_println(s string) {
 	println(s)
 }
@@ -28,6 +28,10 @@ pub fn default() string {
 		return env_font
 	}
 	$if windows {
+		if os.exists('C:\\Windows\\Fonts\\segoeui.ttf') {
+			debug_font_println('Using font "C:\\Windows\\Fonts\\segoeui.ttf"')
+			return 'C:\\Windows\\Fonts\\segoeui.ttf'
+		}
 		debug_font_println('Using font "C:\\Windows\\Fonts\\arial.ttf"')
 		return 'C:\\Windows\\Fonts\\arial.ttf'
 	}
@@ -36,7 +40,7 @@ pub fn default() string {
 			'/Library/Fonts/Arial.ttf']
 		for font in fonts {
 			if os.is_file(font) {
-				debug_font_println('Using font "$font"')
+				debug_font_println('Using font "${font}"')
 				return font
 			}
 		}
@@ -58,7 +62,7 @@ pub fn default() string {
 							for location in font_locations {
 								candidate_path := os.join_path(location, candidate_font)
 								if os.is_file(candidate_path) && os.is_readable(candidate_path) {
-									debug_font_println('Using font "$candidate_path"')
+									debug_font_println('Using font "${candidate_path}"')
 									return candidate_path
 								}
 							}
@@ -73,7 +77,7 @@ pub fn default() string {
 		lines := fm.output.split('\n')
 		for l in lines {
 			if !l.contains('.ttc') {
-				debug_font_println('Using font "$l"')
+				debug_font_println('Using font "${l}"')
 				return l
 			}
 		}

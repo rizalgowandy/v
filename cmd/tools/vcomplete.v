@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2022 Alexander Medvednikov. All rights reserved.
+// Copyright (c) 2019-2024 Alexander Medvednikov. All rights reserved.
 // Use of this source code is governed by an MIT license
 // that can be found in the LICENSE file.
 //
@@ -41,10 +41,10 @@ module main
 
 import os
 
-const (
-	auto_complete_shells = ['bash', 'fish', 'zsh', 'powershell'] // list of supported shells
-	vexe                 = os.getenv('VEXE')
-	help_text            = "Usage:
+const auto_complete_shells = ['bash', 'fish', 'zsh', 'powershell'] // list of supported shells
+
+const vexe = os.getenv('VEXE')
+const help_text = "Usage:
   v complete [options] [SUBCMD] QUERY...
 
 Description:
@@ -72,186 +72,373 @@ SUBCMD:
   fish      : [QUERY]       - returns Fish compatible completion code with completions computed from QUERY
   zsh       : [QUERY]       - returns ZSH  compatible completion code with completions computed from QUERY
   powershell: [QUERY]       - returns PowerShell compatible completion code with completions computed from QUERY"
-)
 
-// Snooped from cmd/v/v.v, vlib/v/pref/pref.v
-const (
-	auto_complete_commands     = [
-		// simple_cmd
-		'ast',
-		'doc',
-		'vet',
-		// tools in one .v file
-		'bin2v',
-		'bug',
-		'build-examples',
-		'build-tools',
-		'build-vbinaries',
-		'bump',
-		'check-md',
-		'complete',
-		'compress',
-		'create',
-		'doctor',
-		'fmt',
-		'gret',
-		'repl',
-		'self',
-		'setup-freetype',
-		'shader',
-		'symlink',
-		'test-all',
-		'test-cleancode',
-		'test-fmt',
-		'test-parser',
-		'test-self',
-		'test',
-		'tracev',
-		'up',
-		'watch',
-		'wipe-cache',
-		// commands
-		'help',
-		'new',
-		'init',
-		'complete',
-		'translate',
-		'self',
-		'search',
-		'install',
-		'update',
-		'upgrade',
-		'outdated',
-		'list',
-		'remove',
-		'vlib-docs',
-		'get',
-		'version',
-		'run',
-		'build',
-		'build-module',
-	]
-	auto_complete_flags        = [
-		'-apk',
-		'-show-timings',
-		'-check-syntax',
-		'-check',
-		'-v',
-		'-progress',
-		'-silent',
-		'-g',
-		'-cg',
-		'-repl',
-		'-live',
-		'-sharedlive',
-		'-shared',
-		'--enable-globals',
-		'-enable-globals',
-		'-autofree',
-		'-compress',
-		'-freestanding',
-		'-no-preludes',
-		'-prof',
-		'-profile',
-		'-profile-no-inline',
-		'-prod',
-		'-simulator',
-		'-stats',
-		'-obfuscate',
-		'-translated',
-		'-color',
-		'-nocolor',
-		'-showcc',
-		'-show-c-output',
-		'-experimental',
-		'-usecache',
-		'-prealloc',
-		'-parallel',
-		'-native',
-		'-W',
-		'-keepc',
-		'-w',
-		'-print-v-files',
-		'-error-limit',
-		'-message-limit',
-		'-os',
-		'-printfn',
-		'-cflags',
-		'-define',
-		'-d',
-		'-cc',
-		'-o',
-		'-b',
-		'-path',
-		'-custom-prelude',
-		'-name',
-		'-bundle',
-		'-V',
-		'-version',
-		'--version',
-	]
-	auto_complete_flags_doc    = [
-		'-all',
-		'-f',
-		'-h',
-		'-help',
-		'-m',
-		'-o',
-		'-readme',
-		'-v',
-		'-filename',
-		'-pos',
-		'-no-timestamp',
-		'-inline-assets',
-		'-theme-dir',
-		'-open',
-		'-p',
-		'-s',
-		'-l',
-	]
-	auto_complete_flags_fmt    = [
-		'-c',
-		'-diff',
-		'-l',
-		'-w',
-		'-debug',
-		'-verify',
-	]
-	auto_complete_flags_bin2v  = [
-		'-h',
-		'--help',
-		'-m',
-		'--module',
-		'-p',
-		'--prefix',
-		'-w',
-		'--write',
-	]
-	auto_complete_flags_shader = [
-		'help',
-		'h',
-		'force-update',
-		'u',
-		'verbose',
-		'v',
-		'slang',
-		'l',
-		'output',
-		'o',
-	]
-	auto_complete_flags_self   = [
-		'-prod',
-	]
-	auto_complete_compilers    = [
-		'cc',
-		'gcc',
-		'tcc',
-		'tinyc',
-		'clang',
-		'mingw',
-		'msvc',
-	]
-)
+// Snooped from cmd/v/v.v, vlib/v/pref/pref.c.v
+const auto_complete_commands = [
+	// simple_cmd
+	'ast',
+	'doc',
+	'vet',
+	// tools in one .v file or folder (typically has a "v" prefix)
+	'bin2v',
+	'bug',
+	'build-examples',
+	'build-tools',
+	'build-vbinaries',
+	'bump',
+	'check-md',
+	'complete',
+	'compress',
+	'cover',
+	'create',
+	'doctor',
+	'download',
+	'fmt',
+	'gret',
+	'ls',
+	'retry',
+	'repl',
+	'repeat',
+	'self',
+	'setup-freetype',
+	'scan',
+	'shader',
+	'symlink',
+	'test-all',
+	'test-cleancode',
+	'test-fmt',
+	'test-parser',
+	'test-self',
+	'test',
+	'tracev',
+	'up',
+	'watch',
+	'where',
+	'wipe-cache',
+	// commands
+	'help',
+	'new',
+	'init',
+	'translate',
+	'self',
+	'search',
+	'install',
+	'update',
+	'upgrade',
+	'outdated',
+	'list',
+	'remove',
+	'vlib-docs',
+	'get',
+	'version',
+	'run',
+	'build',
+	'build-module',
+	'missdoc',
+]
+// Entries in the flag arrays below should be entered as is:
+// * Short flags, e.g.: "-v", should be entered: '-v'
+// * Long flags, e.g.: "--version", should be entered: '--version'
+// * Single-dash flags, e.g.: "-version", should be entered: '-version'
+const auto_complete_flags = [
+	'-wasm-validate',
+	'-wasm-stack-top',
+	'-apk',
+	'-arch',
+	'-assert',
+	'-show-timings',
+	'-show-asserts',
+	'-check-syntax',
+	'-check',
+	'-?',
+	'-h',
+	'-help',
+	'--help',
+	'-q',
+	'-v',
+	'-V',
+	'--version',
+	'-version',
+	'-progress',
+	'-Wimpure-v',
+	'-Wfatal-errors',
+	'-silent',
+	'-skip-running',
+	'-cstrict',
+	'-nofloat',
+	'-fast-math',
+	'-e',
+	'-subsystem',
+	'-gc',
+	'-g',
+	'-cg',
+	'-debug-tcc',
+	'-sourcemap',
+	'-warn-about-allocs',
+	'-sourcemap-src-included',
+	'-sourcemap-inline',
+	'-repl',
+	'-live',
+	'-sharedlive',
+	'-shared',
+	'--enable-globals',
+	'-enable-globals',
+	'-autofree',
+	'-print_autofree_vars',
+	'-print_autofree_vars_in_fn',
+	'-trace-calls',
+	'-trace-fns',
+	'-manualfree',
+	'-skip-unused',
+	'-no-skip-unused',
+	'-compress',
+	'-freestanding',
+	'-no-retry-compilation',
+	'-musl',
+	'-glibc',
+	'-no-bounds-checking',
+	'-no-builtin',
+	'-no-preludes',
+	'-no-relaxed-gcc14',
+	'-prof',
+	'-profile',
+	'-cov',
+	'-coverage',
+	'-profile-fns',
+	'-profile-no-inline',
+	'-prod',
+	'-sanitize',
+	'-simulator',
+	'-stats',
+	'-obf',
+	'-obfuscate',
+	'-hide-auto-str',
+	'-translated',
+	'-translated-go',
+	'-m32',
+	'-m64',
+	'-color',
+	'-nocolor',
+	'-showcc',
+	'-show-c-output',
+	'-show-callgraph',
+	'-show-depgraph',
+	'-run-only',
+	'-exclude',
+	'-test-runner',
+	'-dump-c-flags',
+	'-dump-modules',
+	'-dump-files',
+	'-dump-defines',
+	'-experimental',
+	'-usecache',
+	'-use-os-system-to-run',
+	'-macosx-version-min',
+	'-nocache',
+	'-prealloc',
+	'-no-parallel',
+	'-parallel-cc',
+	'-native',
+	'-interpret',
+	'-W',
+	'-w',
+	'-N',
+	'-n',
+	'-no-rsp',
+	'-no-std',
+	'-keepc',
+	'-watch',
+	'-print-v-files',
+	'-print-watched-files',
+	'-http',
+	'-cross',
+	'-os',
+	'-printfn',
+	'-cflags',
+	'-ldflags',
+	'-d',
+	'-define',
+	'-message-limit',
+	'-thread-stack-size',
+	'-cc',
+	'-c++',
+	'-checker-match-exhaustive-cutoff-limit',
+	'-o',
+	'-output',
+	'-is_o',
+	'-b',
+	'-backend',
+	'-es5',
+	'-path',
+	'-bare-builtin-dir',
+	'-custom-prelude',
+	'-raw-vsh-tmp-prefix',
+	'-cmain',
+	'-line-info',
+	'-check-unused-fn-args',
+	'-check-return',
+	'-use-coroutines',
+]
+const auto_complete_flags_cover = [
+	'--help',
+	'-h',
+	'--verbose',
+	'-v',
+	'--hotspots',
+	'-H',
+	'--percentages',
+	'-P',
+	'--show_test_files',
+	'-S',
+	'--absolute',
+	'-A',
+	'--filter',
+	'-f',
+]
+const auto_complete_flags_doc = [
+	'-all',
+	'-f',
+	'-h',
+	'-help',
+	'-m',
+	'-o',
+	'-readme',
+	'-v',
+	'-filename',
+	'-pos',
+	'-no-timestamp',
+	'-inline-assets',
+	'-theme-dir',
+	'-open',
+	'-p',
+	'-s',
+	'-l',
+]
+const auto_complete_flags_download = [
+	'--help',
+	'-h',
+	'--target-folder',
+	'-t',
+	'--sha1',
+	'-1',
+	'--sha256',
+	'-2',
+	'--continue',
+	'-c',
+	'--retries',
+	'-r',
+	'--delay',
+	'-d',
+]
+const auto_complete_flags_fmt = [
+	'-c',
+	'-diff',
+	'-l',
+	'-w',
+	'-debug',
+	'-verify',
+]
+const auto_complete_flags_bin2v = [
+	'-h',
+	'--help',
+	'-m',
+	'--module',
+	'-p',
+	'--prefix',
+	'-w',
+	'--write',
+]
+const auto_complete_flags_retry = [
+	'--help',
+	'-h',
+	'--timeout',
+	'-t',
+	'--delay',
+	'-d',
+	'--retries',
+	'-r',
+]
+const auto_complete_flags_shader = [
+	'--help',
+	'-h',
+	'--force-update',
+	'-u',
+	'--verbose',
+	'-v',
+	'--slang',
+	'-l',
+	'--output',
+	'-o',
+]
+const auto_complete_flags_missdoc = [
+	'--help',
+	'-h',
+	'--tags',
+	'-t',
+	'--deprecated',
+	'-d',
+	'--private',
+	'-p',
+	'--no-line-numbers',
+	'-n',
+	'--exclude',
+	'-e',
+	'--relative-paths',
+	'-r',
+	'--js',
+	'--verify',
+	'--diff',
+]
+const auto_complete_flags_bump = [
+	'--patch',
+	'--minor',
+	'--major',
+]
+const auto_complete_flags_self = [
+	'-prod',
+]
+const auto_complete_flags_where = [
+	'-h',
+	'-f',
+	'-v',
+]
+const auto_complete_flags_repeat = [
+	'--help',
+	'-h',
+	'--runs',
+	'-r',
+	'--series',
+	'-s',
+	'--warmup',
+	'-w',
+	'--newline',
+	'-n',
+	'--output',
+	'-O',
+	'--max_time',
+	'-m',
+	'--fail_percent',
+	'-f',
+	'--template',
+	'-t',
+	'--parameter',
+	'-p',
+	'--nmins',
+	'-i',
+	'--nmaxs',
+	'-a',
+	'--ignore',
+	'-e',
+]
+const auto_complete_compilers = [
+	'cc',
+	'gcc',
+	'tcc',
+	'tinyc',
+	'clang',
+	'mingw',
+	'msvc',
+]
 
 // auto_complete prints auto completion results back to the calling shell's completion system.
 // auto_complete acts as communication bridge between the calling shell and V's completions.
@@ -259,18 +446,18 @@ fn auto_complete(args []string) {
 	if args.len <= 1 || args[0] != 'complete' {
 		if args.len == 1 {
 			shell_path := os.getenv('SHELL')
-			if shell_path.len > 0 {
+			if shell_path != '' {
 				shell_name := os.file_name(shell_path).to_lower()
 				if shell_name in auto_complete_shells {
 					println(setup_for_shell(shell_name))
 					exit(0)
 				}
-				eprintln('Unknown shell ${shell_name}. Supported shells are: $auto_complete_shells')
+				eprintln('Unknown shell ${shell_name}. Supported shells are: ${auto_complete_shells}')
 				exit(1)
 			}
 			eprintln('auto completion require arguments to work.')
 		} else {
-			eprintln('auto completion failed for "$args".')
+			eprintln('auto completion failed for "${args}".')
 		}
 		exit(1)
 	}
@@ -279,7 +466,7 @@ fn auto_complete(args []string) {
 	match sub {
 		'setup' {
 			if sub_args.len <= 1 || sub_args[1] !in auto_complete_shells {
-				eprintln('please specify a shell to setup auto completion for ($auto_complete_shells).')
+				eprintln('please specify a shell to setup auto completion for (${auto_complete_shells}).')
 				exit(1)
 			}
 			shell := sub_args[1]
@@ -292,7 +479,7 @@ fn auto_complete(args []string) {
 			mut lines := []string{}
 			list := auto_complete_request(sub_args[1..])
 			for entry in list {
-				lines << "COMPREPLY+=('$entry')"
+				lines << "COMPREPLY+=('${entry}')"
 			}
 			println(lines.join('\n'))
 		}
@@ -303,7 +490,7 @@ fn auto_complete(args []string) {
 			mut lines := []string{}
 			list := auto_complete_request(sub_args[1..])
 			for entry in list {
-				lines << '$entry'
+				lines << '${entry}'
 			}
 			println(lines.join('\n'))
 		}
@@ -312,11 +499,19 @@ fn auto_complete(args []string) {
 				exit(0)
 			}
 			mut lines := []string{}
+			mut dirs := []string{}
+			mut files := []string{}
 			list := auto_complete_request(sub_args[1..])
 			for entry in list {
-				lines << 'compadd -U -S' + '""' + ' -- ' + "'$entry';"
+				match true {
+					os.is_dir(entry) { dirs << entry }
+					os.is_file(entry) { files << entry }
+					else { lines << entry }
+				}
 			}
-			println(lines.join('\n'))
+			println('compadd -q -- ${lines.join(' ')}')
+			println('compadd -J "dirs" -X "directory" -d -- ${dirs.join(' ')}')
+			println('compadd -J "files" -X "file" -f -- ${files.join(' ')}')
 		}
 		'-h', '--help' {
 			println(help_text)
@@ -326,8 +521,8 @@ fn auto_complete(args []string) {
 	exit(0)
 }
 
-// append_separator_if_dir is a utility function.that returns the input `path` appended an
-// OS dependant path separator if the `path` is a directory.
+// append_separator_if_dir returns the input `path` with an appended
+// `/` or `\`, depending on the platform, when `path` is a directory.
 fn append_separator_if_dir(path string) string {
 	if os.is_dir(path) && !path.ends_with(os.path_separator) {
 		return path + os.path_separator
@@ -348,7 +543,7 @@ fn nearest_path_or_root(path string) string {
 	return fixed_path
 }
 
-// auto_complete_request retuns a list of completions resolved from a full argument list.
+// auto_complete_request returns a list of completions resolved from a full argument list.
 fn auto_complete_request(args []string) []string {
 	// Using space will ensure a uniform input in cases where the shell
 	// returns the completion input as a string (['v','run'] vs. ['v run']).
@@ -372,30 +567,56 @@ fn auto_complete_request(args []string) []string {
 			parent_command = parts[i]
 			break
 		}
-		get_flags := fn (base []string, flag string) []string {
-			if flag.len == 1 { return base
-			 } else { return base.filter(it.starts_with(flag))
-			 }
-		}
-		if part.starts_with('-') { // 'v -<tab>' -> flags.
+		if part.starts_with('-') { // 'v [subcmd] -<tab>' or 'v [subcmd] --<tab>'-> flags.
+			get_flags := fn (base []string, flag string) []string {
+				mut results := []string{}
+				for entry in base {
+					if entry.starts_with(flag) {
+						results << entry
+					}
+				}
+				return results
+			}
+
 			match parent_command {
 				'bin2v' { // 'v bin2v -<tab>'
 					list = get_flags(auto_complete_flags_bin2v, part)
 				}
+				'bump' { // 'v bump -<tab>' -> flags.
+					list = get_flags(auto_complete_flags_bump, part)
+				}
 				'build' { // 'v build -<tab>' -> flags.
 					list = get_flags(auto_complete_flags, part)
+				}
+				'cover' { // 'v cover -<tab>' -> flags.
+					list = get_flags(auto_complete_flags_cover, part)
 				}
 				'doc' { // 'v doc -<tab>' -> flags.
 					list = get_flags(auto_complete_flags_doc, part)
 				}
+				'download' { // 'v download -<tab>' -> flags.
+					list = get_flags(auto_complete_flags_download, part)
+				}
 				'fmt' { // 'v fmt -<tab>' -> flags.
 					list = get_flags(auto_complete_flags_fmt, part)
+				}
+				'missdoc' { // 'v missdoc -<tab>' -> flags.
+					list = get_flags(auto_complete_flags_missdoc, part)
+				}
+				'retry' { // 'v retry -<tab>' -> flags.
+					list = get_flags(auto_complete_flags_retry, part)
+				}
+				'repeat' { // 'v repeat -<tab>' -> flags.
+					list = get_flags(auto_complete_flags_repeat, part)
 				}
 				'self' { // 'v self -<tab>' -> flags.
 					list = get_flags(auto_complete_flags_self, part)
 				}
 				'shader' { // 'v shader -<tab>' -> flags.
 					list = get_flags(auto_complete_flags_shader, part)
+				}
+				'where' { // 'v where -<tab>' -> flags.
+					list = get_flags(auto_complete_flags_where, part)
 				}
 				else {
 					for flag in auto_complete_flags {
@@ -413,6 +634,11 @@ fn auto_complete_request(args []string) []string {
 						}
 					}
 				}
+			}
+			// Clear the list if the result is identical to the part examined
+			// (the flag must have already been completed)
+			if list.len == 1 && part == list[0] {
+				list.clear()
 			}
 		} else {
 			match part {
@@ -441,7 +667,7 @@ fn auto_complete_request(args []string) []string {
 				add_sep := if part == '~' { os.path_separator } else { '' }
 				part = part.replace_once('~', os.home_dir().trim_right(os.path_separator)) + add_sep
 			}
-			is_abs_path := part.starts_with(os.path_separator) // TODO Windows support for drive prefixes
+			is_abs_path := part.starts_with(os.path_separator) // TODO: Windows support for drive prefixes
 			if part.ends_with(os.path_separator) || part == '.' || part == '..' {
 				// 'v <command>(.*/$|.|..)<tab>' -> output full directory list
 				ls_path = '.' + os.path_separator + part
@@ -472,6 +698,17 @@ fn auto_complete_request(args []string) []string {
 					}
 				}
 			} else {
+				// Handle special case, where there is only one file in the directory
+				// being completed - if it can be resolved we return that since
+				// handling it in the generalized logic below will result in
+				// more complexity.
+				if entries.len == 1 && os.is_file(os.join_path(ls_path, entries[0])) {
+					mut keep_input_path_format := ls_path
+					if !part.starts_with('./') && ls_path.starts_with('./') {
+						keep_input_path_format = keep_input_path_format.all_after('./')
+					}
+					return [os.join_path(keep_input_path_format, entries[0])]
+				}
 				for entry in entries {
 					if collect_all || entry.starts_with(last) {
 						list << append_separator_if_dir(entry)
@@ -496,7 +733,7 @@ _v_completions() {
 	local limit
 	# Send all words up to the word the cursor is currently on
 	let limit=1+\$COMP_CWORD
-	src=\$($vexe complete bash \$(printf "%s\\n" \${COMP_WORDS[@]: 0:\$limit}))
+	src=\$(${vexe} complete bash \$(printf "%s\\n" \${COMP_WORDS[@]: 0:\$limit}))
 	if [[ \$? == 0 ]]; then
 		eval \${src}
 		#echo \${src}
@@ -510,7 +747,7 @@ complete -o nospace -F _v_completions v
 			setup = '
 function __v_completions
 	# Send all words up to the one before the cursor
-	$vexe complete fish (commandline -cop)
+	${vexe} complete fish (commandline -cop)
 end
 complete -f -c v -a "(__v_completions)"
 '
@@ -521,7 +758,7 @@ complete -f -c v -a "(__v_completions)"
 _v() {
 	local src
 	# Send all words up to the word the cursor is currently on
-	src=\$($vexe complete zsh \$(printf "%s\\n" \${(@)words[1,\$CURRENT]}))
+	src=\$(${vexe} complete zsh \$(printf "%s\\n" \${(@)words[1,\$CURRENT]}))
 	if [[ \$? == 0 ]]; then
 		eval \${src}
 		#echo \${src}
@@ -534,7 +771,7 @@ compdef _v v
 			setup = '
 Register-ArgumentCompleter -Native -CommandName v -ScriptBlock {
 	param(\$commandName, \$wordToComplete, \$cursorPosition)
-		$vexe complete powershell "\$wordToComplete" | ForEach-Object {
+		${vexe} complete powershell "\$wordToComplete" | ForEach-Object {
 			[System.Management.Automation.CompletionResult]::new(\$_, \$_, \'ParameterValue\', \$_)
 		}
 }

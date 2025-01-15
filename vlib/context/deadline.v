@@ -37,8 +37,8 @@ pub fn with_deadline(mut parent Context, d time.Time) (Context, CancelFn) {
 	cancel_ctx := new_cancel_context(parent)
 	mut ctx := &TimerContext{
 		cancel_ctx: cancel_ctx
-		deadline: d
-		id: id
+		deadline:   d
+		id:         id
 	}
 	propagate_cancel(mut parent, mut ctx)
 	dur := d - time.now()
@@ -51,7 +51,7 @@ pub fn with_deadline(mut parent Context, d time.Time) (Context, CancelFn) {
 	}
 
 	if ctx.err() is none {
-		go fn (mut ctx TimerContext, dur time.Duration) {
+		spawn fn (mut ctx TimerContext, dur time.Duration) {
 			time.sleep(dur)
 			ctx.cancel(true, deadline_exceeded)
 		}(mut ctx, dur)

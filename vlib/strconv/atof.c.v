@@ -1,6 +1,6 @@
 module strconv
 
-// Copyright (c) 2019-2022 Dario Deledda. All rights reserved.
+// Copyright (c) 2019-2024 Dario Deledda. All rights reserved.
 // Use of this source code is governed by an MIT license
 // that can be found in the LICENSE file.
 //
@@ -17,31 +17,25 @@ module strconv
 // Note: when u128 will be available, these function can be refactored.
 
 // f32 constants
-pub const (
-	single_plus_zero      = u32(0x0000_0000)
-	single_minus_zero     = u32(0x8000_0000)
-	single_plus_infinity  = u32(0x7F80_0000)
-	single_minus_infinity = u32(0xFF80_0000)
-)
+pub const single_plus_zero = u32(0x0000_0000)
+pub const single_minus_zero = u32(0x8000_0000)
+pub const single_plus_infinity = u32(0x7F80_0000)
+pub const single_minus_infinity = u32(0xFF80_0000)
 
 // f64 constants
-pub const (
-	digits                = 18
-	double_plus_zero      = u64(0x0000000000000000)
-	double_minus_zero     = u64(0x8000000000000000)
-	double_plus_infinity  = u64(0x7FF0000000000000)
-	double_minus_infinity = u64(0xFFF0000000000000)
-)
+pub const digits = 18
+pub const double_plus_zero = u64(0x0000000000000000)
+pub const double_minus_zero = u64(0x8000000000000000)
+pub const double_plus_infinity = u64(0x7FF0000000000000)
+pub const double_minus_infinity = u64(0xFFF0000000000000)
 
 // char constants
-pub const (
-	c_dpoint = `.`
-	c_plus   = `+`
-	c_minus  = `-`
-	c_zero   = `0`
-	c_nine   = `9`
-	c_ten    = u32(10)
-)
+pub const c_dpoint = `.`
+pub const c_plus = `+`
+pub const c_minus = `-`
+pub const c_zero = `0`
+pub const c_nine = `9`
+pub const c_ten = u32(10)
 
 // right logical shift 96 bit
 fn lsr96(s2 u32, s1 u32, s0 u32) (u32, u32, u32) {
@@ -101,7 +95,7 @@ fn sub96(s2 u32, s1 u32, s0 u32, d2 u32, d1 u32, d0 u32) (u32, u32, u32) {
 
 // Utility functions
 fn is_digit(x u8) bool {
-	return (x >= strconv.c_zero && x <= strconv.c_nine) == true
+	return x >= c_zero && x <= c_nine
 }
 
 fn is_space(x u8) bool {
@@ -109,21 +103,22 @@ fn is_space(x u8) bool {
 }
 
 fn is_exp(x u8) bool {
-	return (x == `E` || x == `e`) == true
+	return x == `E` || x == `e`
 }
 
 // Possible parser return values.
 enum ParserState {
-	ok // parser finished OK
-	pzero // no digits or number is smaller than +-2^-1022
-	mzero // number is negative, module smaller
-	pinf // number is higher than +HUGE_VAL
-	minf // number is lower than -HUGE_VAL
+	ok             // parser finished OK
+	pzero          // no digits or number is smaller than +-2^-1022
+	mzero          // number is negative, module smaller
+	pinf           // number is higher than +HUGE_VAL
+	minf           // number is lower than -HUGE_VAL
 	invalid_number // invalid number, used for '#@%^' for example
 }
 
 // parser tries to parse the given string into a number
-// NOTE: #TOFIX need one char after the last char of the number
+// FIXME: need one char after the last char of the number
+@[direct_array_access]
 fn parser(s string) (ParserState, PrepNumber) {
 	mut digx := 0
 	mut result := ParserState.ok
@@ -151,9 +146,9 @@ fn parser(s string) (ParserState, PrepNumber) {
 	// read mantissa
 	for i < s.len && s[i].is_digit() {
 		// println("$i => ${s[i]}")
-		if digx < strconv.digits {
+		if digx < digits {
 			pn.mantissa *= 10
-			pn.mantissa += u64(s[i] - strconv.c_zero)
+			pn.mantissa += u64(s[i] - c_zero)
 			digx++
 		} else if pn.exponent < 2147483647 {
 			pn.exponent++
@@ -162,12 +157,12 @@ fn parser(s string) (ParserState, PrepNumber) {
 	}
 
 	// read mantissa decimals
-	if (i < s.len) && (s[i] == `.`) {
+	if i < s.len && s[i] == `.` {
 		i++
 		for i < s.len && s[i].is_digit() {
-			if digx < strconv.digits {
+			if digx < digits {
 				pn.mantissa *= 10
-				pn.mantissa += u64(s[i] - strconv.c_zero)
+				pn.mantissa += u64(s[i] - c_zero)
 				pn.exponent--
 				digx++
 			}
@@ -176,13 +171,13 @@ fn parser(s string) (ParserState, PrepNumber) {
 	}
 
 	// read exponent
-	if (i < s.len) && ((s[i] == `e`) || (s[i] == `E`)) {
+	if i < s.len && (s[i] == `e` || s[i] == `E`) {
 		i++
 		if i < s.len {
 			// esponent sign
-			if s[i] == strconv.c_plus {
+			if s[i] == c_plus {
 				i++
-			} else if s[i] == strconv.c_minus {
+			} else if s[i] == c_minus {
 				expneg = true
 				i++
 			}
@@ -190,7 +185,7 @@ fn parser(s string) (ParserState, PrepNumber) {
 			for i < s.len && s[i].is_digit() {
 				if expexp < 214748364 {
 					expexp *= 10
-					expexp += int(s[i] - strconv.c_zero)
+					expexp += int(s[i] - c_zero)
 				}
 				i++
 			}
@@ -241,7 +236,7 @@ fn converter(mut pn PrepNumber) u64 {
 	mut r2 := u32(0)
 	mut r1 := u32(0)
 	mut r0 := u32(0)
-	//
+
 	mask28 := u32(u64(0xF) << 28)
 	mut result := u64(0)
 	// working on 3 u32 to have 96 bit precision
@@ -271,24 +266,24 @@ fn converter(mut pn PrepNumber) u64 {
 			s1 = q1
 			s0 = q0
 		}
-		q2 = s2 / strconv.c_ten
-		r1 = s2 % strconv.c_ten
+		q2 = s2 / c_ten
+		r1 = s2 % c_ten
 		r2 = (s1 >> 8) | (r1 << 24)
-		q1 = r2 / strconv.c_ten
-		r1 = r2 % strconv.c_ten
+		q1 = r2 / c_ten
+		r1 = r2 % c_ten
 		r2 = ((s1 & u32(0xFF)) << 16) | (s0 >> 16) | (r1 << 24)
-		r0 = r2 / strconv.c_ten
-		r1 = r2 % strconv.c_ten
+		r0 = r2 / c_ten
+		r1 = r2 % c_ten
 		q1 = (q1 << 8) | ((r0 & u32(0x00FF0000)) >> 16)
 		q0 = r0 << 16
 		r2 = (s0 & u32(0xFFFF)) | (r1 << 16)
-		q0 |= r2 / strconv.c_ten
+		q0 |= r2 / c_ten
 		s2 = q2
 		s1 = q1
 		s0 = q0
 		pn.exponent++
 	}
-	// C.printf("mantissa before normalization: %08x%08x%08x binexp: %d \n", s2,s1,s0,binexp)
+	// C.printf(c"mantissa before normalization: %08x%08x%08x binexp: %d \n", s2,s1,s0,binexp)
 	// normalization, the 28 bit in s2 must the leftest one in the variable
 	if s2 != 0 || s1 != 0 || s0 != 0 {
 		for (s2 & mask28) == 0 {
@@ -332,20 +327,20 @@ fn converter(mut pn PrepNumber) u64 {
 	s0=0x0
 	*/
 
-	// C.printf("mantissa before rounding: %08x%08x%08x binexp: %d \n", s2,s1,s0,binexp)
-	// s1 => 0xFFFFFFxx only F are rapresented
+	// C.printf(c"mantissa before rounding: %08x%08x%08x binexp: %d \n", s2,s1,s0,binexp)
+	// s1 => 0xFFFFFFxx only F are represented
 	nbit := 7
 	check_round_bit := u32(1) << u32(nbit)
 	check_round_mask := u32(0xFFFFFFFF) << u32(nbit)
 	if (s1 & check_round_bit) != 0 {
-		// C.printf("need round!! cehck mask: %08x\n", s1 & ~check_round_mask )
+		// C.printf(c"need round!! check mask: %08x\n", s1 & ~check_round_mask )
 		if (s1 & ~check_round_mask) != 0 {
-			// C.printf("Add 1!\n")
+			// C.printf(c"Add 1!\n")
 			s2, s1, s0 = add96(s2, s1, s0, 0, check_round_bit, 0)
 		} else {
-			// C.printf("All 0!\n")
+			// C.printf(c"All 0!\n")
 			if (s1 & (check_round_bit << u32(1))) != 0 {
-				// C.printf("Add 1 form -1 bit control!\n")
+				// C.printf(c"Add 1 form -1 bit control!\n")
 				s2, s1, s0 = add96(s2, s1, s0, 0, check_round_bit, 0)
 			}
 		}
@@ -353,31 +348,32 @@ fn converter(mut pn PrepNumber) u64 {
 		s0 = u32(0)
 		// recheck normalization
 		if s2 & (mask28 << u32(1)) != 0 {
-			// C.printf("Renormalize!!")
+			// C.printf(c"Renormalize!!\n")
 			q2, q1, q0 = lsr96(s2, s1, s0)
-			binexp--
+			binexp++
+			// dump(binexp)
 			s2 = q2
 			s1 = q1
 			s0 = q0
 		}
 	}
 	// tmp := ( u64(s2 & ~mask28) << 24) | ((u64(s1) + u64(128)) >> 8)
-	// C.printf("mantissa after rounding : %08x%08x%08x binexp: %d \n", s2,s1,s0,binexp)
-	// C.printf("Tmp result: %016x\n",tmp)
+	// C.printf(c"mantissa after rounding : %08x %08x %08x binexp: %d \n", s2,s1,s0,binexp)
+	// C.printf(c"Tmp result: %016x\n",tmp)
 	// end rounding
 	// offset the binary exponent IEEE 754
 	binexp += 1023
 	if binexp > 2046 {
 		if pn.negative {
-			result = strconv.double_minus_infinity
+			result = double_minus_infinity
 		} else {
-			result = strconv.double_plus_infinity
+			result = double_plus_infinity
 		}
 	} else if binexp < 1 {
 		if pn.negative {
-			result = strconv.double_minus_zero
+			result = double_minus_zero
 		} else {
-			result = strconv.double_plus_zero
+			result = double_plus_zero
 		}
 	} else if s2 != 0 {
 		mut q := u64(0)
@@ -392,7 +388,7 @@ fn converter(mut pn PrepNumber) u64 {
 }
 
 // atof64 parses the string `s`, and if possible, converts it into a f64 number
-pub fn atof64(s string) ?f64 {
+pub fn atof64(s string) !f64 {
 	if s.len == 0 {
 		return error('expected a number found an empty string')
 	}
@@ -403,16 +399,16 @@ pub fn atof64(s string) ?f64 {
 			res.u = converter(mut pn)
 		}
 		.pzero {
-			res.u = strconv.double_plus_zero
+			res.u = double_plus_zero
 		}
 		.mzero {
-			res.u = strconv.double_minus_zero
+			res.u = double_minus_zero
 		}
 		.pinf {
-			res.u = strconv.double_plus_infinity
+			res.u = double_plus_infinity
 		}
 		.minf {
-			res.u = strconv.double_minus_infinity
+			res.u = double_minus_infinity
 		}
 		.invalid_number {
 			return error('not a number')

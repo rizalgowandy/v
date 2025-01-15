@@ -1,4 +1,3 @@
-import os
 import objects
 import gg
 import gx
@@ -6,8 +5,8 @@ import rand
 
 struct App {
 mut:
-	gg      &gg.Context       = 0
-	ui      &objects.UIParams = 0
+	gg      &gg.Context       = unsafe { nil }
+	ui      &objects.UIParams = unsafe { nil }
 	rockets []objects.Rocket
 	frames  [][]objects.Rocket
 	// i thought about using a fixed fifo queue for the frames but the array
@@ -93,27 +92,17 @@ fn (mut app App) resize() {
 	app.ui.height = size.height
 }
 
-// is needed for easier diagnostics on windows
-[console]
 fn main() {
-	mut font_path := os.resource_abs_path(os.join_path('..', 'assets', 'fonts', 'RobotoMono-Regular.ttf'))
-	$if android {
-		font_path = 'fonts/RobotoMono-Regular.ttf'
-	}
-
 	mut app := &App{}
 	app.ui = objects.get_params()
-
 	app.gg = gg.new_context(
-		width: app.ui.width
-		height: app.ui.height
+		width:        app.ui.width
+		height:       app.ui.height
 		window_title: 'Fireworks!'
-		bg_color: gx.black
-		user_data: app
-		frame_fn: on_frame
-		event_fn: on_event
-		font_path: font_path
+		bg_color:     gx.black
+		user_data:    app
+		frame_fn:     on_frame
+		event_fn:     on_event
 	)
-
 	app.gg.run()
 }

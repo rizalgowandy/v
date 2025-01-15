@@ -2,17 +2,13 @@ import math
 import rand
 import rand.sys
 
-const (
-	range_limit = 40
-	value_count = 1000
-	seeds       = [u32(42), 256]
-)
+const range_limit = 40
+const value_count = 1000
+const seeds = [u32(42), 256]
 
-const (
-	sample_size   = 1000
-	stats_epsilon = 0.05
-	inv_sqrt_12   = 1.0 / math.sqrt(12)
-)
+const sample_size = 1000
+const stats_epsilon = 0.05
+const inv_sqrt_12 = 1.0 / math.sqrt(12)
 
 fn get_n_randoms(n int, mut r rand.PRNG) []int {
 	mut ints := []int{cap: n}
@@ -182,6 +178,20 @@ fn test_sys_rng_intn() {
 	}
 }
 
+fn test_sys_rng_i32n() {
+	max := i32(2525642)
+	for seed in seeds {
+		seed_data := [seed]
+		mut rng := &rand.PRNG(&sys.SysRNG{})
+		rng.seed(seed_data)
+		for _ in 0 .. range_limit {
+			value := rng.i32n(max) or { panic("Couldn't obtain i32") }
+			assert value >= 0
+			assert value < max
+		}
+	}
+}
+
 fn test_sys_rng_i64n() {
 	max := i64(3246727724653636)
 	for seed in seeds {
@@ -205,6 +215,21 @@ fn test_sys_rng_int_in_range() {
 		rng.seed(seed_data)
 		for _ in 0 .. range_limit {
 			value := rng.int_in_range(min, max) or { panic("Couldn't obtain int in range") }
+			assert value >= min
+			assert value < max
+		}
+	}
+}
+
+fn test_sys_rng_i32_in_range() {
+	min := i32(-4252)
+	max := i32(23054962)
+	for seed in seeds {
+		seed_data := [seed]
+		mut rng := &rand.PRNG(&sys.SysRNG{})
+		rng.seed(seed_data)
+		for _ in 0 .. range_limit {
+			value := rng.i32_in_range(min, max) or { panic("Couldn't obtain i32 in range") }
 			assert value >= min
 			assert value < max
 		}

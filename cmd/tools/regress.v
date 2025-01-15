@@ -41,7 +41,7 @@ fn main() {
   To find when a feature was implemented (feature.v should succeed on master):
      ./v run cmd/tools/regress.v --old a7019ac --command "! ./v run /abs/path/to/feature.v"')
 	fp.skip_executable()
-	//
+
 	context.new_commit = fp.string('new', `n`, 'master', 'The new commit, by default: master.')
 	context.old_commit = fp.string('old', `o`, '', 'A known old commit, required (for it, COMMAND should exit with 0).')
 	context.command = fp.string('command', `c`, '', 'A command to execute. Should exit with 0 for the *old* commits.')
@@ -56,24 +56,24 @@ fn main() {
 	}
 	if !os.exists(oldvexe) {
 		if 0 != execute('${os.quoted_path(vexe)} -o ${os.quoted_path(oldvexe)} ${os.quoted_path(oldv_source)}') {
-			panic('can not compile $oldvexe')
+			panic('can not compile ${oldvexe}')
 		}
 	}
 	os.execute('git checkout master')
 	os.execute('git bisect reset')
-	os.execute('git checkout $context.new_commit')
+	os.execute('git checkout ${context.new_commit}')
 	os.execute('git bisect start')
 	os.execute('git bisect new')
-	os.execute('git checkout $context.old_commit')
+	os.execute('git checkout ${context.old_commit}')
 	os.execute('git bisect old')
 	println(term.colorize(term.bright_yellow, term.header('', '-')))
-	execute('git bisect run ${os.quoted_path(oldvexe)} --bisect -c "$context.command"')
+	execute('git bisect run ${os.quoted_path(oldvexe)} --bisect -c "${context.command}"')
 	println(term.colorize(term.bright_yellow, term.header('', '-')))
 	os.execute('git bisect reset')
 	os.execute('git checkout master')
 }
 
 fn execute(cmd string) int {
-	eprintln('### $cmd')
+	eprintln('### ${cmd}')
 	return os.system(cmd)
 }

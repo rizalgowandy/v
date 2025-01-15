@@ -21,22 +21,20 @@ mut:
 	s [32]u8
 }
 
-pub const (
-	sc_zero = Scalar{
-		s: [u8(0), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-			0, 0, 0, 0, 0]!
-	}
+pub const sc_zero = Scalar{
+	s: [u8(0), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+		0, 0, 0, 0]!
+}
 
-	sc_one = Scalar{
-		s: [u8(1), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-			0, 0, 0, 0, 0]!
-	}
+pub const sc_one = Scalar{
+	s: [u8(1), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+		0, 0, 0, 0]!
+}
 
-	sc_minus_one = Scalar{
-		s: [u8(236), 211, 245, 92, 26, 99, 18, 88, 214, 156, 247, 162, 222, 249, 222, 20, 0, 0,
-			0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 16]!
-	}
-)
+pub const sc_minus_one = Scalar{
+	s: [u8(236), 211, 245, 92, 26, 99, 18, 88, 214, 156, 247, 162, 222, 249, 222, 20, 0, 0, 0,
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 16]!
+}
 
 // new_scalar return new zero scalar
 pub fn new_scalar() Scalar {
@@ -46,7 +44,7 @@ pub fn new_scalar() Scalar {
 // add sets s = x + y mod l, and returns s.
 pub fn (mut s Scalar) add(x Scalar, y Scalar) Scalar {
 	// s = 1 * x + y mod l
-	sc_mul_add(mut s.s, edwards25519.sc_one.s, x.s, y.s)
+	sc_mul_add(mut s.s, sc_one.s, x.s, y.s)
 	return s
 }
 
@@ -59,21 +57,21 @@ pub fn (mut s Scalar) multiply_add(x Scalar, y Scalar, z Scalar) Scalar {
 // subtract sets s = x - y mod l, and returns s.
 pub fn (mut s Scalar) subtract(x Scalar, y Scalar) Scalar {
 	// s = -1 * y + x mod l
-	sc_mul_add(mut s.s, edwards25519.sc_minus_one.s, y.s, x.s)
+	sc_mul_add(mut s.s, sc_minus_one.s, y.s, x.s)
 	return s
 }
 
 // negate sets s = -x mod l, and returns s.
 pub fn (mut s Scalar) negate(x Scalar) Scalar {
 	// s = -1 * x + 0 mod l
-	sc_mul_add(mut s.s, edwards25519.sc_minus_one.s, x.s, edwards25519.sc_zero.s)
+	sc_mul_add(mut s.s, sc_minus_one.s, x.s, sc_zero.s)
 	return s
 }
 
 // multiply sets s = x * y mod l, and returns s.
 pub fn (mut s Scalar) multiply(x Scalar, y Scalar) Scalar {
 	// s = x * y + 0 mod l
-	sc_mul_add(mut s.s, x.s, y.s, edwards25519.sc_zero.s)
+	sc_mul_add(mut s.s, x.s, y.s, sc_zero.s)
 	return s
 }
 
@@ -86,7 +84,7 @@ pub fn (mut s Scalar) set(x Scalar) Scalar {
 // set_uniform_bytes sets s to an uniformly distributed value given 64 uniformly
 // distributed random bytes. If x is not of the right length, set_uniform_bytes
 // returns an error, and the receiver is unchanged.
-pub fn (mut s Scalar) set_uniform_bytes(x []u8) ?Scalar {
+pub fn (mut s Scalar) set_uniform_bytes(x []u8) !Scalar {
 	if x.len != 64 {
 		return error('edwards25519: invalid set_uniform_bytes input length')
 	}
@@ -102,7 +100,7 @@ pub fn (mut s Scalar) set_uniform_bytes(x []u8) ?Scalar {
 // set_canonical_bytes sets s = x, where x is a 32-byte little-endian encoding of
 // s, and returns s. If x is not a canonical encoding of s, set_canonical_bytes
 // returns an error, and the receiver is unchanged.
-pub fn (mut s Scalar) set_canonical_bytes(x []u8) ?Scalar {
+pub fn (mut s Scalar) set_canonical_bytes(x []u8) !Scalar {
 	if x.len != 32 {
 		return error('invalid scalar length')
 	}
@@ -123,10 +121,10 @@ pub fn (mut s Scalar) set_canonical_bytes(x []u8) ?Scalar {
 // is_reduced returns whether the given scalar is reduced modulo l.
 fn is_reduced(s Scalar) bool {
 	for i := s.s.len - 1; i >= 0; i-- {
-		if s.s[i] > edwards25519.sc_minus_one.s[i] {
+		if s.s[i] > sc_minus_one.s[i] {
 			return false
 		}
-		if s.s[i] < edwards25519.sc_minus_one.s[i] {
+		if s.s[i] < sc_minus_one.s[i] {
 			return true
 		}
 		/*
@@ -152,7 +150,7 @@ fn is_reduced(s Scalar) bool {
 // expected as long as it is applied to points on the prime order subgroup, like
 // in Ed25519. In fact, it is lost to history why RFC 8032 adopted the
 // irrelevant RFC 7748 clamping, but it is now required for compatibility.
-pub fn (mut s Scalar) set_bytes_with_clamping(x []u8) ?Scalar {
+pub fn (mut s Scalar) set_bytes_with_clamping(x []u8) !Scalar {
 	// The description above omits the purpose of the high bits of the clamping
 	// for brevity, but those are also lost to reductions, and are also
 	// irrelevant to edwards25519 as they protect against a specific
@@ -1070,7 +1068,7 @@ fn (mut s Scalar) signed_radix16() []i8 {
 // utility function
 // generate returns a valid (reduced modulo l) Scalar with a distribution
 // weighted towards high, low, and edge values.
-fn generate_scalar(size int) ?Scalar {
+fn generate_scalar(size int) !Scalar {
 	/*
 	s := scZero
 	diceRoll := rand.Intn(100)
@@ -1098,7 +1096,7 @@ fn generate_scalar(size int) ?Scalar {
 	}
 	return reflect.ValueOf(s)
 	*/
-	mut s := edwards25519.sc_zero
+	mut s := sc_zero
 	diceroll := rand.intn(100) or { 0 }
 	match true {
 		/*
@@ -1106,16 +1104,16 @@ fn generate_scalar(size int) ?Scalar {
 			case diceroll == 1:
 		*/
 		diceroll == 0 || diceroll == 1 {
-			s = edwards25519.sc_one
+			s = sc_one
 		}
 		diceroll == 2 {
-			s = edwards25519.sc_minus_one
+			s = sc_minus_one
 		}
 		diceroll < 5 {
 			// rand.Read(s.s[:16]) // read random bytes and fill buf
 			// using builtin rand.read([]buf)
 			rand.read(mut s.s[..16])
-			// buf := rand.read(s.s[..16].len) ?
+			// buf := rand.read(s.s[..16].len)!
 			// copy(mut s.s[..16], buf)
 
 			/*
@@ -1132,7 +1130,7 @@ fn generate_scalar(size int) ?Scalar {
 			// Read generates len(p) random bytes and writes them into p
 			// rand.Read(s.s[:16])
 			rand.read(mut s.s[..16])
-			// buf := rand.read(s.s[..16].len) ?
+			// buf := rand.read(s.s[..16].len)!
 			// copy(mut s.s[..16], buf)
 
 			/*
@@ -1148,7 +1146,7 @@ fn generate_scalar(size int) ?Scalar {
 			// of being out of the latter range).
 			// rand.Read(s.s[:])
 			rand.read(mut s.s[..])
-			// buf := crand.read(s.s.len) ?
+			// buf := crand.read(s.s.len)!
 			// copy(mut s.s[..], buf)
 
 			/*
@@ -1164,10 +1162,10 @@ fn generate_scalar(size int) ?Scalar {
 
 type NotZeroScalar = Scalar
 
-fn generate_notzero_scalar(size int) ?NotZeroScalar {
+fn generate_notzero_scalar(size int) !NotZeroScalar {
 	mut s := Scalar{}
-	for s == edwards25519.sc_zero {
-		s = generate_scalar(size) ?
+	for s == sc_zero {
+		s = generate_scalar(size)!
 	}
 	return NotZeroScalar(s)
 }

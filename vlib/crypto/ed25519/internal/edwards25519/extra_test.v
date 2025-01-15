@@ -7,7 +7,7 @@ import encoding.hex
 const github_job = os.getenv('GITHUB_JOB')
 
 fn testsuite_begin() {
-	if edwards25519.github_job != '' {
+	if github_job != '' {
 		// ensure that the CI does not run flaky tests:
 		rand.seed([u32(0xffff24), 0xabcd])
 	}
@@ -44,12 +44,12 @@ fn test_bytes_montgomery() {
        }
 }*/
 
-fn test_bytes_montgomery_sodium() ? {
+fn test_bytes_montgomery_sodium() {
 	// Generated with libsodium.js 1.0.18
 	// crypto_sign_keypair().pubkey
 	pubkey := '3bf918ffc2c955dc895bf145f566fb96623c1cadbe040091175764b5fde322c0'
 	mut p := Point{}
-	p.set_bytes(hex.decode(pubkey) ?) ?
+	p.set_bytes(hex.decode(pubkey)!)!
 
 	// crypto_sign_ed25519_pk_to_curve25519(pubkey)
 	want := 'efc6c9d0738e9ea18d738ad4a2653631558931b0f1fde4dd58c436d19686dc28'
@@ -65,17 +65,15 @@ fn test_bytes_montgomery_infinity() {
 	assert got == want
 }
 
-const (
-	loworder_string = '26e8958fc2b227b045c3f489f2ef98f0d5dfac05d3c63339b13802886d53fc85'
-	loworder_bytes  = hex.decode(loworder_string) or { panic(err) }
-)
+const loworder_string = '26e8958fc2b227b045c3f489f2ef98f0d5dfac05d3c63339b13802886d53fc85'
+const loworder_bytes = hex.decode(loworder_string) or { panic(err) }
 
 fn fn_cofactor(mut data []u8) bool {
 	if data.len != 64 {
 		panic('data.len should be 64')
 	}
 	mut loworder := Point{}
-	loworder.set_bytes(edwards25519.loworder_bytes) or { panic(err) }
+	loworder.set_bytes(loworder_bytes) or { panic(err) }
 
 	mut s := new_scalar()
 	mut p := Point{}
@@ -113,9 +111,9 @@ fn fn_cofactor(mut data []u8) bool {
 	return p8.equal(pp) == 1
 }
 
-fn test_mult_by_cofactor() ? {
+fn test_mult_by_cofactor() {
 	mut loworder := Point{}
-	mut data := rand.bytes(64) ?
+	mut data := rand.bytes(64)!
 
 	assert fn_cofactor(mut data) == true
 }

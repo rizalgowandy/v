@@ -1,7 +1,6 @@
 module js
 
 import v.ast
-import v.pref
 
 fn (mut g JsGen) comptime_if(node ast.IfExpr) {
 	if !node.is_expr && !node.has_else && node.branches.len == 1 {
@@ -25,21 +24,21 @@ fn (mut g JsGen) comptime_if(node ast.IfExpr) {
 		}
 
 		if node.is_expr {
-			print('$branch.stmts')
+			print('${branch.stmts}')
 			len := branch.stmts.len
 			if len > 0 {
 				last := branch.stmts.last() as ast.ExprStmt
 				if len > 1 {
 					tmp := g.new_tmp_var()
 					g.inc_indent()
-					g.writeln('let $tmp;')
+					g.writeln('let ${tmp};')
 					g.writeln('{')
 					g.stmts(branch.stmts[..len - 1])
-					g.write('\t$tmp = ')
+					g.write('\t${tmp} = ')
 					g.stmt(last)
 					g.writeln('}')
 					g.dec_indent()
-					g.writeln('$tmp;')
+					g.writeln('${tmp};')
 				} else {
 					g.stmt(last)
 				}
@@ -77,32 +76,32 @@ fn (mut g JsGen) comptime_if_cond(cond ast.Expr, pkg_exist bool) bool {
 				verror(err.msg())
 				return false
 			}
-			g.write('$ifdef')
+			g.write('${ifdef}')
 			return true
 		}
 		ast.InfixExpr {
 			match cond.op {
 				.and, .logical_or {
 					l := g.comptime_if_cond(cond.left, pkg_exist)
-					g.write(' $cond.op ')
+					g.write(' ${cond.op} ')
 					r := g.comptime_if_cond(cond.right, pkg_exist)
 					return if cond.op == .and { l && r } else { l || r }
 				}
 				.key_is, .not_is {
 					left := cond.left
 					mut name := ''
-					mut exp_type := ast.Type(0)
+					mut exp_type := ast.no_type
 					got_type := (cond.right as ast.TypeNode).typ
 					// Handle `$if x is Interface {`
 					// mut matches_interface := 'false'
 					if left is ast.TypeNode && cond.right is ast.TypeNode
-						&& g.table.sym(got_type).kind == .interface_ {
+						&& g.table.sym(got_type).kind == .interface {
 						// `$if Foo is Interface {`
 						interface_sym := g.table.sym(got_type)
 						if interface_sym.info is ast.Interface {
 							// q := g.table.sym(interface_sym.info.types[0])
 							checked_type := g.unwrap_generic(left.typ)
-							// TODO PERF this check is run twice (also in the checker)
+							// TODO: PERF this check is run twice (also in the checker)
 							// store the result in a field
 							is_true := g.table.does_type_implement_interface(checked_type,
 								got_type)
@@ -126,7 +125,7 @@ fn (mut g JsGen) comptime_if_cond(cond ast.Expr, pkg_exist bool) bool {
 							//}
 						}
 					} else if left is ast.SelectorExpr {
-						name = '${left.expr}.$left.field_name'
+						name = '${left.expr}.${left.field_name}'
 						exp_type = g.comptime_var_type_map[name]
 					} else if left is ast.TypeNode {
 						// this is only allowed for generics currently, otherwise blocked by checker
@@ -134,15 +133,15 @@ fn (mut g JsGen) comptime_if_cond(cond ast.Expr, pkg_exist bool) bool {
 					}
 
 					if cond.op == .key_is {
-						g.write('$exp_type == $got_type')
+						g.write('${exp_type} == ${got_type}')
 						return exp_type == got_type
 					} else {
-						g.write('$exp_type != $got_type')
+						g.write('${exp_type} != ${got_type}')
 						return exp_type != got_type
 					}
 				}
 				.eq, .ne {
-					// TODO Implement `$if method.args.len == 1`
+					// TODO: Implement `$if method.args.len == 1`
 					g.write('1')
 					return true
 				}
@@ -153,11 +152,11 @@ fn (mut g JsGen) comptime_if_cond(cond ast.Expr, pkg_exist bool) bool {
 		}
 		ast.Ident {
 			ifdef := g.comptime_if_to_ifdef(cond.name, false) or { 'true' } // handled in checker
-			g.write('$ifdef')
+			g.write('${ifdef}')
 			return true
 		}
 		ast.ComptimeCall {
-			g.write('$pkg_exist')
+			g.write('${pkg_exist}')
 			return true
 		}
 		else {
@@ -168,7 +167,7 @@ fn (mut g JsGen) comptime_if_cond(cond ast.Expr, pkg_exist bool) bool {
 	}
 }
 
-fn (mut g JsGen) comptime_if_to_ifdef(name string, is_comptime_optional bool) ?string {
+fn (mut g JsGen) comptime_if_to_ifdef(name string, is_comptime_option bool) !string {
 	match name {
 		// platforms/os-es:
 		'windows' {
@@ -236,6 +235,9 @@ fn (mut g JsGen) comptime_if_to_ifdef(name string, is_comptime_optional bool) ?s
 		'js' {
 			return 'true'
 		}
+		'native' {
+			return 'false'
+		}
 		// compilers:
 		'gcc' {
 			return 'false'
@@ -284,6 +286,9 @@ fn (mut g JsGen) comptime_if_to_ifdef(name string, is_comptime_optional bool) ?s
 		'freestanding' {
 			return '_VFREESTANDING'
 		}
+		'autofree' {
+			return '_VAUTOFREE'
+		}
 		// architectures:
 		'amd64' {
 			return '(\$process.arch == "x64")'
@@ -300,18 +305,18 @@ fn (mut g JsGen) comptime_if_to_ifdef(name string, is_comptime_optional bool) ?s
 		}
 		// endianness:
 		'little_endian' {
-			return '(\$os.endianess == "LE")'
+			return '(\$os.endianness == "LE")'
 		}
 		'big_endian' {
-			return '(\$os.endianess == "BE")'
+			return '(\$os.endianness == "BE")'
 		}
 		else {
-			if is_comptime_optional
+			if is_comptime_option
 				|| (g.pref.compile_defines_all.len > 0 && name in g.pref.compile_defines_all) {
-				return 'checkDefine("CUSTOM_DEFINE_$name")'
+				return 'checkDefine("CUSTOM_DEFINE_${name}")'
 			}
-			return error('bad os ifdef name "$name"') // should never happen, caught in the checker
+			return error('bad os ifdef name "${name}"') // should never happen, caught in the checker
 		}
 	}
-	return none
+	return error('none')
 }

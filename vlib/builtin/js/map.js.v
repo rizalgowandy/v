@@ -20,7 +20,7 @@ fn (mut m map) internal_set(key JS.Any, val JS.Any) {
 }
 
 fn (mut m map) internal_get(key JS.Any) JS.Any {
-	mut val := JS.Any(voidptr(0))
+	mut val := JS.Any(unsafe { nil })
 	//$if es5 {
 	#if (typeof key != "string" && '$toJS' in key) key = key.$toJS();
 	#val =  m.val.map[key]
@@ -36,7 +36,7 @@ fn (mut m map) internal_get(key JS.Any) JS.Any {
 #map.prototype.set = function(key,val) { map_internal_set(this,key,val); }
 #map.prototype.has = function (key) { if (typeof key != "string" && '$toJS' in key) { key = key.$toJS() } return key in this.map; }
 // Removes the mapping of a particular key from the map.
-[unsafe]
+@[unsafe]
 pub fn (mut m map) delete(key JS.Any) {
 	#let k = '$toJS' in key ? key.$toJS() : key;
 

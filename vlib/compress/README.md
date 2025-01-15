@@ -1,4 +1,10 @@
-## Description:
+## Description
 
 `compress` is a namespace for (multiple) compression algorithms supported by V.
-At the moment, only `compress.zlib` is implemented.
+
+At the moment, the following compression algorithms are implemented:
+
+- `compress.deflate`
+- `compress.gzip`
+- `compress.zlib`
+- `compress.zstd`

@@ -4,7 +4,7 @@ module strconv
 
 f64 to string
 
-Copyright (c) 2019-2022 Dario Deledda. All rights reserved.
+Copyright (c) 2019-2024 Dario Deledda. All rights reserved.
 Use of this source code is governed by an MIT license
 that can be found in the LICENSE file.
 
@@ -20,9 +20,9 @@ https://github.com/cespare/ryu/tree/ba56a33f39e3bbbfa409095d0f9ae168a595feea
 
 =============================================================================*/
 
-[direct_array_access]
+@[direct_array_access]
 fn (d Dec64) get_string_64(neg bool, i_n_digit int, i_pad_digit int) string {
-	mut n_digit := i_n_digit + 1
+	mut n_digit := if i_n_digit < 1 { 1 } else { i_n_digit + 1 }
 	pad_digit := i_pad_digit + 1
 	mut out := d.m
 	mut d_exp := d.e
@@ -54,7 +54,10 @@ fn (d Dec64) get_string_64(neg bool, i_n_digit int, i_pad_digit int) string {
 		out += ten_pow_table_64[out_len - n_digit - 1] * 5 // round to up
 		out /= ten_pow_table_64[out_len - n_digit]
 		// println("out1:[$out] ${d.m / ten_pow_table_64[out_len - n_digit ]}")
-		if d.m / ten_pow_table_64[out_len - n_digit] < out {
+		// fix issue #22424
+		out_div := d.m / ten_pow_table_64[out_len - n_digit]
+		if out_div < out && dec_digits(out_div) < dec_digits(out) {
+			// from `99` to `100`, will need d_exp+1
 			d_exp++
 			n_digit++
 		}
@@ -74,13 +77,14 @@ fn (d Dec64) get_string_64(neg bool, i_n_digit int, i_pad_digit int) string {
 		x++
 	}
 
+	// fix issue #22424
 	// no decimal digits needed, end here
-	if i_n_digit == 0 {
-		unsafe {
-			buf[i] = 0
-			return tos(&u8(&buf[0]), i)
-		}
-	}
+	// if i_n_digit == 0 {
+	//	unsafe {
+	//		buf[i] = 0
+	//		return tos(&u8(&buf[0]), i)
+	//	}
+	//}
 
 	if out_len >= 1 {
 		buf[y - x] = `.`
@@ -187,7 +191,7 @@ fn f64_to_decimal(mant u64, exp u64) Dec64 {
 		k := pow5_inv_num_bits_64 + pow5_bits(int(q)) - 1
 		i := -e2 + int(q) + k
 
-		mul := pow5_inv_split_64[q]
+		mul := *(&Uint128(&pow5_inv_split_64_x[q * 2]))
 		vr = mul_shift_64(u64(4) * m2, mul, i)
 		vp = mul_shift_64(u64(4) * m2 + u64(2), mul, i)
 		vm = mul_shift_64(u64(4) * m2 - u64(1) - mm_shift, mul, i)
@@ -215,7 +219,7 @@ fn f64_to_decimal(mant u64, exp u64) Dec64 {
 		i := -e2 - int(q)
 		k := pow5_bits(i) - pow5_num_bits_64
 		j := int(q) - k
-		mul := pow5_split_64[i]
+		mul := *(&Uint128(&pow5_split_64_x[i * 2]))
 		vr = mul_shift_64(u64(4) * m2, mul, j)
 		vp = mul_shift_64(u64(4) * m2 + u64(2), mul, j)
 		vm = mul_shift_64(u64(4) * m2 - u64(1) - mm_shift, mul, j)
@@ -258,7 +262,7 @@ fn f64_to_decimal(mant u64, exp u64) Dec64 {
 			vr_div_10 := vr / 10
 			vr_mod_10 := vr % 10
 			vm_is_trailing_zeros = vm_is_trailing_zeros && vm_mod_10 == 0
-			vr_is_trailing_zeros = vr_is_trailing_zeros && (last_removed_digit == 0)
+			vr_is_trailing_zeros = vr_is_trailing_zeros && last_removed_digit == 0
 			last_removed_digit = u8(vr_mod_10)
 			vr = vr_div_10
 			vp = vp_div_10
@@ -275,7 +279,7 @@ fn f64_to_decimal(mant u64, exp u64) Dec64 {
 				vp_div_10 := vp / 10
 				vr_div_10 := vr / 10
 				vr_mod_10 := vr % 10
-				vr_is_trailing_zeros = vr_is_trailing_zeros && (last_removed_digit == 0)
+				vr_is_trailing_zeros = vr_is_trailing_zeros && last_removed_digit == 0
 				last_removed_digit = u8(vr_mod_10)
 				vr = vr_div_10
 				vp = vp_div_10
@@ -283,7 +287,7 @@ fn f64_to_decimal(mant u64, exp u64) Dec64 {
 				removed++
 			}
 		}
-		if vr_is_trailing_zeros && (last_removed_digit == 5) && (vr % 2) == 0 {
+		if vr_is_trailing_zeros && last_removed_digit == 5 && (vr % 2) == 0 {
 			// Round even if the exact number is .....50..0.
 			last_removed_digit = 4
 		}
@@ -331,7 +335,7 @@ fn f64_to_decimal(mant u64, exp u64) Dec64 {
 // String Functions
 //=============================================================================
 
-// f64_to_str return a string in scientific notation with max n_digit after the dot
+// f64_to_str returns `f` as a `string` in scientific notation with max `n_digit` digits after the dot.
 pub fn f64_to_str(f f64, n_digit int) string {
 	mut u1 := Uf64{}
 	u1.f = f
@@ -343,7 +347,7 @@ pub fn f64_to_str(f f64, n_digit int) string {
 	// println("s:${neg} mant:${mant} exp:${exp} float:${f} byte:${u1.u:016lx}")
 
 	// Exit early for easy cases.
-	if (exp == maxexp64) || (exp == 0 && mant == 0) {
+	if exp == maxexp64 || (exp == 0 && mant == 0) {
 		return get_string_special(neg, exp == 0, mant == 0)
 	}
 
@@ -356,7 +360,7 @@ pub fn f64_to_str(f f64, n_digit int) string {
 	return d.get_string_64(neg, n_digit, 0)
 }
 
-// f64_to_str return a string in scientific notation with max n_digit after the dot
+// f64_to_str returns `f` as a `string` in scientific notation with max `n_digit` digits after the dot.
 pub fn f64_to_str_pad(f f64, n_digit int) string {
 	mut u1 := Uf64{}
 	u1.f = f
@@ -365,10 +369,10 @@ pub fn f64_to_str_pad(f f64, n_digit int) string {
 	neg := (u >> (mantbits64 + expbits64)) != 0
 	mant := u & ((u64(1) << mantbits64) - u64(1))
 	exp := (u >> mantbits64) & ((u64(1) << expbits64) - u64(1))
-	// println("s:${neg} mant:${mant} exp:${exp} float:${f} byte:${u1.u:016lx}")
+	// unsafe { println("s:${neg} mant:${mant} exp:${exp} float:${f} byte:${u1.u:016x}") }
 
 	// Exit early for easy cases.
-	if (exp == maxexp64) || (exp == 0 && mant == 0) {
+	if exp == maxexp64 || (exp == 0 && mant == 0) {
 		return get_string_special(neg, exp == 0, mant == 0)
 	}
 

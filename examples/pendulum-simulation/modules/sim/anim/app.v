@@ -13,13 +13,13 @@ struct Pixel {
 	color gx.Color
 }
 
-struct App {
+pub struct App {
 pub:
 	args         simargs.ParallelArgs
 	request_chan chan &sim.SimRequest
 	result_chan  chan &sim.SimResult
 pub mut:
-	gg     &gg.Context = 0
+	gg     &gg.Context = unsafe { nil }
 	iidx   int
 	pixels []u32
 }
@@ -28,27 +28,28 @@ pub fn new_app(args simargs.ParallelArgs) &App {
 	total_pixels := args.grid.height * args.grid.width
 
 	mut app := &App{
-		args: args
-		pixels: []u32{len: total_pixels}
+		args:         args
+		pixels:       []u32{len: total_pixels}
 		request_chan: chan &sim.SimRequest{cap: args.grid.width}
 	}
 	app.gg = gg.new_context(
-		width: args.grid.width
-		height: args.grid.height
+		width:         args.grid.width
+		height:        args.grid.height
 		create_window: true
-		window_title: 'V Pendulum Simulation'
-		user_data: app
-		bg_color: anim.bg_color
-		frame_fn: frame
-		init_fn: init
+		window_title:  'V Pendulum Simulation'
+		user_data:     app
+		bg_color:      bg_color
+		frame_fn:      frame
+		init_fn:       init
 	)
 	return app
 }
 
 fn init(mut app App) {
 	app.iidx = app.gg.new_streaming_image(app.args.grid.width, app.args.grid.height, 4,
-		pixel_format: .rgba8)
-	go pixels_worker(mut app)
+		pixel_format: .rgba8
+	)
+	spawn pixels_worker(mut app)
 }
 
 fn frame(mut app App) {
@@ -59,6 +60,6 @@ fn frame(mut app App) {
 
 fn (mut app App) draw() {
 	mut istream_image := app.gg.get_cached_image_by_idx(app.iidx)
-	istream_image.update_pixel_data(&app.pixels[0])
+	istream_image.update_pixel_data(unsafe { &u8(&app.pixels[0]) })
 	app.gg.draw_image(0, 0, app.args.grid.width, app.args.grid.height, istream_image)
 }

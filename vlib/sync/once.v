@@ -24,7 +24,7 @@ pub fn (mut o Once) do(f fn ()) {
 }
 
 fn (mut o Once) do_slow(f fn ()) {
-	o.m.@lock()
+	o.m.lock()
 	if o.count < 1 {
 		stdatomic.store_u64(&o.count, 1)
 		f()
@@ -41,6 +41,7 @@ fn (mut o Once) do_slow(f fn ()) {
 //        o.add(5)
 // })
 // ```
+//
 // ... you can use:
 // ```v
 //    once.do_with_param(fn (mut o One) {
@@ -55,7 +56,7 @@ pub fn (mut o Once) do_with_param(f fn (voidptr), param voidptr) {
 }
 
 fn (mut o Once) do_slow_with_param(f fn (p voidptr), param voidptr) {
-	o.m.@lock()
+	o.m.lock()
 	if o.count < 1 {
 		stdatomic.store_u64(&o.count, 1)
 		f(param)
